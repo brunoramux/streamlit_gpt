@@ -1,32 +1,48 @@
 import streamlit as st
-import anthropic
+from openai import OpenAI
+import os
+from PyPDF2 import PdfReader
 
-with st.sidebar:
-    anthropic_api_key = st.secrets['ANTHROPIC_API_KEY']
+client = OpenAI(api_key=st.secrets['OPENAI_API_KEY'])
   
 
-st.title("📝 File Q&A with Anthropic")
-uploaded_file = st.file_uploader("Upload an article", type=("txt", "md", "pdf"))
+st.title("📝 File Q&A with ChatGPT")
+
+def pdf_to_text(file):
+    reader = PdfReader(file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
+
+uploaded_file = st.file_uploader("Carregue um arquivo PDF", type=["pdf"])
+
+if uploaded_file:
+    text = pdf_to_text(uploaded_file)
+
 question = st.text_input(
     "Ask something about the article",
     placeholder="Can you give me a short summary?",
     disabled=not uploaded_file,
 )
 
-if uploaded_file and question and not anthropic_api_key:
-    st.info("Please add your Anthropic API key to continue.")
+if "messages" not in st.session_state:
+  st.session_state["messages"] = []
+  
+for message in st.session_state.messages:
+  st.chat_message(message["role"]).write(message["content"])
 
-if uploaded_file and question and anthropic_api_key:
-    article = uploaded_file.read().decode()
-    prompt = f"""{anthropic.HUMAN_PROMPT} Here's an article:\n\n<article>
-    {article}\n\n</article>\n\n{question}{anthropic.AI_PROMPT}"""
+if uploaded_file and question:
+    article = text
+    prompt = f"""Here's an article:\n\n<article>
+    {article}\n\n</article>\n\n{question}"""
+    
+    st.session_state.messages.append({"role":"user", "content":prompt})
 
-    client = anthropic.Client(api_key=anthropic_api_key)
-    response = client.completions.create(
-        prompt=prompt,
-        stop_sequences=[anthropic.HUMAN_PROMPT],
-        model="claude-v1",  # "claude-2" for Claude 2 model
-        max_tokens_to_sample=100,
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",  
+        messages=st.session_state.messages
     )
-    st.write("### Answer")
-    st.write(response.completion)
+    msg = response.choices[0].message.content
+    st.session_state.messages.append({"role": "assistant", "content": msg})
+    st.chat_message("assistant").write(msg)

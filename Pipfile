@@ -7,6 +7,7 @@ name = "pypi"
 streamlit = "*"
 openai = "*"
 anthropic = "*"
+pypdf2 = "*"
 
 [dev-packages]
 
